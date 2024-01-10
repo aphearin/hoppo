@@ -10,7 +10,8 @@ from diffstar.kernels.main_sequence_kernels import (
 from diffstar.kernels.main_sequence_kernels import _get_unbounded_sfr_params
 from diffstar.kernels.quenching_kernels import DEFAULT_Q_PDICT as DEFAULT_Q_PARAMS_DICT
 from diffstar.kernels.quenching_kernels import _get_unbounded_q_params
-from diffstar.utils import _jax_get_dt_array
+from diffstar.sfh import sfh_galpop
+from dsps.utils import cumulative_mstar_formed
 from jax import jit as jjit
 from jax import numpy as jnp
 from jax import random as jran
@@ -43,10 +44,13 @@ DEFAULT_UNBOUND_Q_PARAMS_MAIN_SEQ = DEFAULT_UNBOUND_Q_PARAMS.copy()
 DEFAULT_UNBOUND_Q_PARAMS_MAIN_SEQ[0] = 1.9
 
 SFH_PDF_Q_KEYS = list(DEFAULT_SFH_PDF_QUENCH_PARAMS.keys())
-SFH_PDF_Q_VALUES = list(DEFAULT_SFH_PDF_QUENCH_PARAMS.values())
+SFH_PDF_Q_VALUES = np.array(list(DEFAULT_SFH_PDF_QUENCH_PARAMS.values()))
 
 SFH_PDF_MS_KEYS = list(DEFAULT_SFH_PDF_MAINSEQ_PARAMS.keys())
-SFH_PDF_MS_VALUES = list(DEFAULT_SFH_PDF_MAINSEQ_PARAMS.values())
+SFH_PDF_MS_VALUES = np.array(list(DEFAULT_SFH_PDF_MAINSEQ_PARAMS.values()))
+
+DEFAULT_R_QUENCH_VALUES = np.array(list(DEFAULT_R_QUENCH_PARAMS.values()))
+DEFAULT_R_MAINSEQ_VALUES = np.array(list(DEFAULT_R_MAINSEQ_PARAMS.values()))
 
 
 @partial(jjit, static_argnames=["n_histories"])
@@ -57,10 +61,10 @@ def draw_sfh_MIX(
     p50,
     n_histories,
     ran_key,
-    pdf_parameters_Q=DEFAULT_SFH_PDF_QUENCH_PARAMS,
-    pdf_parameters_MS=DEFAULT_SFH_PDF_MAINSEQ_PARAMS,
-    R_model_params_Q=DEFAULT_R_QUENCH_PARAMS,
-    R_model_params_MS=DEFAULT_R_MAINSEQ_PARAMS,
+    pdf_parameters_Q=SFH_PDF_Q_VALUES,
+    pdf_parameters_MS=SFH_PDF_MS_VALUES,
+    R_model_params_Q=DEFAULT_R_QUENCH_VALUES,
+    R_model_params_MS=DEFAULT_R_MAINSEQ_VALUES,
 ):
     """
     Generate Monte Carlo realization of the star formation histories of
@@ -114,8 +118,6 @@ def draw_sfh_MIX(
     fstar : ndarray of shape (n_histories, n_times_fstar)
         SFH averaged over timescale fstar_tdelay in units of Msun/yr assuming h=1.
     """
-    lgt = jnp.log10(t_table)
-    dt = _jax_get_dt_array(t_table)
     logmh = jnp.atleast_1d(logmh)
 
     (choice_key, quench_key, mainseq_key, fquench_key, ran_key) = jran.split(ran_key, 5)
@@ -163,20 +165,17 @@ def draw_sfh_MIX(
     )
     sfr_params_MS = sfr_params_MS + shifts_mainseq
 
-    mstar_Q, sfr_Q, fstar_Q = sm_sfr_history_diffstar_scan_XsfhXmah_vmap(
-        t_table, lgt, dt, mah_params_sampled, sfr_params_Q, q_params_Q
-    )
-    mstar_MS, sfr_MS, fstar_MS = sm_sfr_history_diffstar_scan_MS_XsfhXmah_vmap(
-        t_table, lgt, dt, mah_params_sampled, sfr_params_MS
-    )
+    args_Q = (t_table, mah_params_sampled, sfr_params_Q, q_params_Q)
+    sfr_Q = sfh_galpop(*args_Q)
+    mstar_Q = cumulative_mstar_formed(t_table, sfr_Q)
+
+    args_MS = (t_table, mah_params_sampled, sfr_params_MS, q_params_MS)
+    sfr_MS = sfh_galpop(*args_MS)
+    mstar_MS = cumulative_mstar_formed(t_table, sfr_MS)
+
     mstar = jnp.concatenate((mstar_Q, mstar_MS))
     sfr = jnp.concatenate((sfr_Q, sfr_MS))
 
-    weight = jnp.concatenate(
-        (
-            frac_quench,
-            (1.0 - frac_quench),
-        )
-    )
+    weight = jnp.concatenate((frac_quench, (1.0 - frac_quench)))
     p50_sampled = jnp.concatenate((p50_sampled, p50_sampled))
     return mstar, sfr, p50_sampled, weight

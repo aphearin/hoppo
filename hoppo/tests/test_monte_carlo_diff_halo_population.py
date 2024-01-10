@@ -22,3 +22,4 @@ def test_mcpop_evaluates():
     p50 = jran.uniform(p50_key, minval=0, maxval=1, shape=(n_mah_halos,))
 
     args = (t_table, logmh, mah_params, p50, n_histories, ran_key)
+    res = mcpop.draw_sfh_MIX(*args)
