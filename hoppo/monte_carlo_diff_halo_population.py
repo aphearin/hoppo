@@ -43,15 +43,6 @@ UH = DEFAULT_UNBOUND_SFR_PARAMS_DICT["indx_hi"]
 DEFAULT_UNBOUND_Q_PARAMS_MAIN_SEQ = DEFAULT_UNBOUND_Q_PARAMS.copy()
 DEFAULT_UNBOUND_Q_PARAMS_MAIN_SEQ[0] = 1.9
 
-SFH_PDF_Q_KEYS = list(DEFAULT_SFH_PDF_QUENCH_PARAMS.keys())
-SFH_PDF_Q_VALUES = np.array(list(DEFAULT_SFH_PDF_QUENCH_PARAMS.values()))
-
-SFH_PDF_MS_KEYS = list(DEFAULT_SFH_PDF_MAINSEQ_PARAMS.keys())
-SFH_PDF_MS_VALUES = np.array(list(DEFAULT_SFH_PDF_MAINSEQ_PARAMS.values()))
-
-DEFAULT_R_QUENCH_VALUES = np.array(list(DEFAULT_R_QUENCH_PARAMS.values()))
-DEFAULT_R_MAINSEQ_VALUES = np.array(list(DEFAULT_R_MAINSEQ_PARAMS.values()))
-
 
 @partial(jjit, static_argnames=["n_histories"])
 def draw_sfh_MIX(
@@ -61,10 +52,10 @@ def draw_sfh_MIX(
     p50,
     n_histories,
     ran_key,
-    pdf_parameters_Q=SFH_PDF_Q_VALUES,
-    pdf_parameters_MS=SFH_PDF_MS_VALUES,
-    R_model_params_Q=DEFAULT_R_QUENCH_VALUES,
-    R_model_params_MS=DEFAULT_R_MAINSEQ_VALUES,
+    pdf_parameters_Q=np.array(list(DEFAULT_SFH_PDF_QUENCH_PARAMS.values())),
+    pdf_parameters_MS=np.array(list(DEFAULT_SFH_PDF_MAINSEQ_PARAMS.values())),
+    R_model_params_Q=np.array(list(DEFAULT_R_QUENCH_PARAMS.values())),
+    R_model_params_MS=np.array(list(DEFAULT_R_MAINSEQ_PARAMS.values())),
 ):
     """
     Generate Monte Carlo realization of the star formation histories of
