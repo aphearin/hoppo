@@ -1,0 +1,7 @@
+[run]
+source= hoppo/
+
+omit =
+    hoppo/__init__.py
+    hoppo/_version.py
+    hoppo/tests/*.py
