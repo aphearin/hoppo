@@ -108,16 +108,22 @@ def draw_sfh_MIX(
 
     Returns
     -------
-    mstar : ndarray of shape (n_histories, n_times)
-        Stores cumulative stellar mass history in units of Msun/yr.
-    sfr : ndarray of shape (n_histories, n_times)
-        Stores star formation rate history in units of Msun/yr.
-    fstar : ndarray of shape (n_histories, n_times_fstar)
-        SFH averaged over timescale fstar_tdelay in units of Msun/yr assuming h=1.
+    mstar : ndarray of shape (n_histories x 2, n_times)
+        Stores cumulative stellar mass history in units of Msun/yr
+
+    sfr : ndarray of shape (n_histories x 2, n_times)
+        Stores star formation rate history in units of Msun/yr
+
+    p50 : ndarray of shape (n_histories x 2, n_times)
+        Stores star formation rate history in units of Msun/yr
+
+    weights : ndarray of shape (n_histories x 2, )
+        Stores star formation rate history in units of Msun/yr
+
     """
     logmh = jnp.atleast_1d(logmh)
 
-    (choice_key, quench_key, mainseq_key, fquench_key, ran_key) = jran.split(ran_key, 5)
+    (choice_key, quench_key, mainseq_key, ran_key) = jran.split(ran_key, 4)
     n_mah = len(mah_params)
 
     sampled_mahs_inds = jran.choice(
