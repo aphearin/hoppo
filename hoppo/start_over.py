@@ -1,5 +1,7 @@
 """
 """
+from collections import OrderedDict
+
 import numpy as np
 from jax import jit as jjit
 
@@ -29,5 +31,14 @@ def draw_single_sfh_MIX_with_exsitu(
     R_model_params_MS=np.array(list(DEFAULT_R_MAINSEQ_PARAMS.values())),
 ):
     lgm0 = mah_params[0]
-    _res = _get_mean_smah_params_mainseq(lgm0)
+    pdict = OrderedDict(
+        [
+            (key, val)
+            for (key, val) in DEFAULT_SFH_PDF_MAINSEQ_PARAMS.items()
+            if "mean_" in key
+        ]
+    )
+
+    _res = _get_mean_smah_params_mainseq(lgm0, **pdict)
     ulgm, ulgy, ul, utau = _res
+    return ulgm, ulgy, ul, utau
