@@ -123,7 +123,7 @@ def draw_sfh_MIX(
     """
     logmh = jnp.atleast_1d(logmh)
 
-    (choice_key, quench_key, mainseq_key, ran_key) = jran.split(ran_key, 4)
+    (choice_key, quench_key, mainseq_key, fquench_key, ran_key) = jran.split(ran_key, 5)
     n_mah = len(mah_params)
 
     sampled_mahs_inds = jran.choice(
