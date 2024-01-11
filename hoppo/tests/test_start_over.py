@@ -15,5 +15,4 @@ def test_something():
 
     p50 = 0.5
     args = t_table, DEFAULT_MAH_PARAMS, p50, ran_key
-    _res = start_over.draw_single_sfh_MIX_with_exsitu(*args)
-    ulgm, ulgy, ul, utau = _res
+    mean_mainseq, cov_mainseq = start_over.draw_single_sfh_MIX_with_exsitu(*args)

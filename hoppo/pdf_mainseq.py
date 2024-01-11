@@ -55,6 +55,7 @@ def _fun_chol_diag(x, ymin, ymax):
     return _res
 
 
+@jjit
 def _get_cov_scalar(
     ulgm_ulgm,
     ulgy_ulgy,
