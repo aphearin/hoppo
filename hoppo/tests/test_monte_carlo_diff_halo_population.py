@@ -7,7 +7,7 @@ from jax import random as jran
 from .. import monte_carlo_diff_halo_population as mcpop
 
 
-def test_mcpop_evaluates():
+def test_draw_sfh_MIX_evaluates():
     ran_key = jran.PRNGKey(0)
     n_times = 100
     t0 = 13.8

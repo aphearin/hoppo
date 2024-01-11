@@ -202,3 +202,121 @@ def draw_sfh_MIX(
     weight = jnp.concatenate((frac_quench, (1.0 - frac_quench)))
     p50_sampled = jnp.concatenate((p50_sampled, p50_sampled))
     return mstar, sfr, p50_sampled, weight
+
+
+@jjit
+def draw_single_sfh_MIX_with_exsitu(
+    t_table,
+    mah_params,
+    p50,
+    ran_key,
+    pdf_parameters_Q=np.array(list(DEFAULT_SFH_PDF_QUENCH_PARAMS.values())),
+    pdf_parameters_MS=np.array(list(DEFAULT_SFH_PDF_MAINSEQ_PARAMS.values())),
+    R_model_params_Q=np.array(list(DEFAULT_R_QUENCH_PARAMS.values())),
+    R_model_params_MS=np.array(list(DEFAULT_R_MAINSEQ_PARAMS.values())),
+):
+    """
+    Generate Monte Carlo realization of the star formation histories of
+    a mixed population of quenched and main sequence galaxies
+    for a single halo mass bin.
+
+    There is correlation with p50.
+
+    Parameters
+    ----------
+    t_table : ndarray of shape (n_times, )
+        Cosmic time array in Gyr.
+    logmh : float
+        Base-10 log of present-day halo mass of the halo population
+    mah_params : ndarray of shape (n_mah_haloes x n_mah_params)
+        Array with the diffmah parameters that will be marginalized over. Could
+        be either individual fits of n_mah_haloes haloes, or be n_mah_haloes
+        samples from a population model. They are chosen at random n_halos times.
+    p50 : mah_params : ndarray of shape (n_mah_haloes, )
+        Formation time percentile of each halo conditioned on halo mass.
+    ran_key : ndarray of shape 2
+        JAX random key.
+    pdf_model_params_Q : ndarray of shape (n_pdf, )
+        Array containing the Diffstarpop parameters for the quenched population.
+        Default is DEFAULT_SFH_PDF_QUENCH_PARAMS.
+    pdf_model_params_MS : ndarray of shape (n_pdf, )
+        Array containing the Diffstarpop parameters for the main sequence population.
+        Default is DEFAULT_SFH_PDF_MAINSEQ_PARAMS.
+    R_model_params_Q: ndarray of shape (n_R, )
+        Array containing the Diffstarpop parameters for the correlation between
+        diffstar and diffmah parameters for the quenched population.
+    R_model_params_MS: ndarray of shape (n_R, )
+        Array containing the Diffstarpop parameters for the correlation between
+        diffstar and diffmah parameters for the main sequence population.
+
+    Returns
+    -------
+    sfr : ndarray of shape (n_histories, n_times)
+        Stores star formation rate history in units of Msun/yr.
+    """
+    logmh = jnp.atleast_1d(mah_params[0])
+
+    (quench_key, mainseq_key, ran_key) = jran.split(ran_key, 3)
+
+    _res = get_smah_means_and_covs_mainseq(logmh, *pdf_parameters_MS)
+    means_mainseq, covs_mainseq = _res
+    means_mainseq = means_mainseq[0]
+    covs_mainseq = covs_mainseq[0]
+
+    R_vals_mainseq = _get_slopes_mainseq(logmh, *R_model_params_MS)
+    R_vals_mainseq = jnp.array(R_vals_mainseq)[:, 0]
+    shifts_mainseq = R_vals_mainseq * (p50 - 0.5)
+
+    _res = get_smah_means_and_covs_quench(logmh, *pdf_parameters_Q)
+    frac_quench, means_quench, covs_quench = _res
+    frac_quench = frac_quench[0]
+    means_quench = means_quench[0]
+    covs_quench = covs_quench[0]
+
+    _res = _get_slopes_quench(logmh, *R_model_params_Q)
+    R_Fquench, R_vals_quench = _res[0], _res[1:]
+    R_vals_quench = jnp.array(R_vals_quench)[:, 0]
+    shifts_quench = R_vals_quench * (p50 - 0.5)
+    shifts_Fquench = R_Fquench * (p50 - 0.5)
+    fquench_x0 = pdf_parameters_Q[0] + shifts_Fquench
+    frac_quench = frac_quench_vs_lgm0(logmh, fquench_x0, *pdf_parameters_Q[1:4])
+
+    sfh_params_Q = jran.multivariate_normal(
+        quench_key, means_quench, covs_quench, shape=(1,)
+    )
+    sfh_params_Q = sfh_params_Q + shifts_quench
+
+    sfr_params_Q = sfh_params_Q[:, 0:4]
+    q_params_Q = sfh_params_Q[:, 4:8]
+
+    sfr_params_MS = jran.multivariate_normal(
+        mainseq_key, means_mainseq, covs_mainseq, shape=(1,)
+    )
+    sfr_params_MS = sfr_params_MS + shifts_mainseq
+    # q_params_MS = jnp.ones_like(q_params_Q) * 10.0
+
+    sfr_params_Q = sfr_params_Q[0]
+    q_params_Q = q_params_Q[0]
+    sfr_params_MS = sfr_params_MS[0]
+
+    sfr_Q_insitu = sfr_history_diffstar_scan(
+        t_table,
+        mah_params,
+        sfr_params_Q,
+        q_params_Q,
+    )
+    sfr_MS_insitu = sfr_history_diffstar_scan_MS(
+        t_table,
+        mah_params,
+        sfr_params_MS,
+    )
+
+    sfr_Q = sfr_Q_insitu
+    sfr_MS = sfr_MS_insitu
+
+    sfr = jnp.array([sfr_Q, sfr_MS])
+
+    frac_quench = frac_quench[0]
+    weight = jnp.array([frac_quench, (1.0 - frac_quench)])
+
+    return sfr, weight
