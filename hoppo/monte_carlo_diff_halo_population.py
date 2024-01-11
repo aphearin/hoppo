@@ -4,6 +4,8 @@ from collections import OrderedDict
 from functools import partial
 
 import numpy as np
+from diffstar.defaults import FB, LGT0
+from diffstar.kernels.kernel_builders import get_ms_sfh_from_mah_kern
 from diffstar.kernels.main_sequence_kernels import (
     DEFAULT_MS_PDICT as DEFAULT_SFR_PARAMS_DICT,
 )
@@ -15,6 +17,7 @@ from dsps.utils import cumulative_mstar_formed
 from jax import jit as jjit
 from jax import numpy as jnp
 from jax import random as jran
+from jax import vmap
 
 from .pdf_mainseq import DEFAULT_SFH_PDF_MAINSEQ_PARAMS, get_smah_means_and_covs_mainseq
 from .pdf_model_assembly_bias_shifts import (
@@ -40,8 +43,9 @@ DEFAULT_UNBOUND_Q_PARAMS = np.array(
 )
 UH = DEFAULT_UNBOUND_SFR_PARAMS_DICT["indx_hi"]
 
-DEFAULT_UNBOUND_Q_PARAMS_MAIN_SEQ = DEFAULT_UNBOUND_Q_PARAMS.copy()
-DEFAULT_UNBOUND_Q_PARAMS_MAIN_SEQ[0] = 1.9
+
+ms_sfh_galpop_u_params = get_ms_sfh_from_mah_kern(galpop_loop="vmap", tobs_loop="scan")
+cumulative_mstar_formed_vmap = jjit(vmap(cumulative_mstar_formed, in_axes=(None, 0)))
 
 
 @partial(jjit, static_argnames=["n_histories"])
@@ -56,6 +60,8 @@ def draw_sfh_MIX(
     pdf_parameters_MS=np.array(list(DEFAULT_SFH_PDF_MAINSEQ_PARAMS.values())),
     R_model_params_Q=np.array(list(DEFAULT_R_QUENCH_PARAMS.values())),
     R_model_params_MS=np.array(list(DEFAULT_R_MAINSEQ_PARAMS.values())),
+    lgt0=LGT0,
+    fb=FB,
 ):
     """
     Generate Monte Carlo realization of the star formation histories of
@@ -149,20 +155,40 @@ def draw_sfh_MIX(
     sfh_params_Q = sfh_params_Q + shifts_quench
 
     sfr_params_Q = sfh_params_Q[:, 0:4]
+    sfr_params_Q = jnp.array(
+        (
+            sfh_params_Q[:, 0],
+            sfh_params_Q[:, 1],
+            sfh_params_Q[:, 2],
+            UH + jnp.zeros(sfh_params_Q.shape[0]),
+            sfh_params_Q[:, 3],
+        )
+    ).T
     q_params_Q = sfh_params_Q[:, 4:8]
+
+    args_Q = (t_table, mah_params_sampled, sfr_params_Q, q_params_Q)
+    sfr_Q = sfh_galpop(
+        *args_Q, ms_param_type="unbounded", q_param_type="unbounded", lgt0=LGT0, fb=FB
+    )
+    mstar_Q = cumulative_mstar_formed_vmap(t_table, sfr_Q)
 
     sfr_params_MS = jran.multivariate_normal(
         mainseq_key, means_mainseq, covs_mainseq, shape=(n_histories,)
     )
     sfr_params_MS = sfr_params_MS + shifts_mainseq
+    sfr_params_MS = jnp.array(
+        (
+            sfr_params_MS[:, 0],
+            sfr_params_MS[:, 1],
+            sfr_params_MS[:, 2],
+            UH + jnp.zeros(sfr_params_MS.shape[0]),
+            sfr_params_MS[:, 3],
+        )
+    ).T
 
-    args_Q = (t_table, mah_params_sampled, sfr_params_Q, q_params_Q)
-    sfr_Q = sfh_galpop(*args_Q)
-    mstar_Q = cumulative_mstar_formed(t_table, sfr_Q)
-
-    args_MS = (t_table, mah_params_sampled, sfr_params_MS, q_params_MS)
-    sfr_MS = sfh_galpop(*args_MS)
-    mstar_MS = cumulative_mstar_formed(t_table, sfr_MS)
+    args_MS = (t_table, mah_params_sampled, sfr_params_MS)
+    sfr_MS = ms_sfh_galpop_u_params(*args_MS, lgt0, fb)
+    mstar_MS = cumulative_mstar_formed_vmap(t_table, sfr_MS)
 
     mstar = jnp.concatenate((mstar_Q, mstar_MS))
     sfr = jnp.concatenate((sfr_Q, sfr_MS))

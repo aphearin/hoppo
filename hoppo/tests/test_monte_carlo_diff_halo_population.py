@@ -36,3 +36,7 @@ def test_mcpop_evaluates():
     assert np.any(mstar > 0)
     assert np.all(mstar < 1e13)
     assert np.all(sfr >= 0)
+    assert np.all(p50_sampled > 0)
+    assert np.all(p50_sampled < 1)
+    assert np.all(weight > 0)
+    assert np.all(weight < 1)
