@@ -19,6 +19,8 @@ from .pdf_quenched import DEFAULT_SFH_PDF_QUENCH_PARAMS, _get_chol_params_quench
 from .pdf_quenched import _get_cov_scalar as _get_cov_scalar_q
 from .pdf_quenched import _get_mean_smah_params_quench, frac_quench_vs_lgm0
 
+DEFAULT_Q_U_PARAMS_UNQUENCHED = jnp.ones(4) * 5
+
 
 @jjit
 def mc_diffstar_u_params_singlegal(
@@ -74,14 +76,10 @@ def mc_diffstar_u_params_singlegal(
     u_params_ms = jran.multivariate_normal(ms_key, jnp.array(mu_ms), cov_ms, shape=())
 
     u_params_ms = u_params_ms + shifts_ms
+    u_params_ms = jnp.array((*u_params_ms, *DEFAULT_Q_U_PARAMS_UNQUENCHED))
     u_params_q = u_params_q + shifts_q[1:]
 
     uran = jran.uniform(frac_q_key, minval=0, maxval=1, shape=())
+    u_params = jnp.where(uran < frac_quench, u_params_q, u_params_ms)
 
-    msk_q = uran < frac_quench
-    # Finally need to implement this properly
-    # should use the scalar value of F_q calculated above
-    # Need to take care of u_params_q and u_params_ms having different dimension
-    # u_params = jnp.where(uran < frac_q, u_params_q, u_params_ms)
-
-    return u_params_q, u_params_ms, shifts_q, frac_quench, msk_q
+    return u_params_q, u_params_ms, frac_quench, u_params
