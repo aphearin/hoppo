@@ -4,7 +4,7 @@ from jax import jit as jjit
 from jax import numpy as jnp
 from jax import vmap
 
-from .utils import _sigmoid
+from ..utils import _sigmoid
 
 TODAY = 13.8
 LGT0 = jnp.log10(TODAY)
