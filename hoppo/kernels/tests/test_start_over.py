@@ -12,3 +12,4 @@ def test_something():
     p50 = 0.25
     args = DEFAULT_MAH_PARAMS, p50, ran_key
     _res = start_over.mc_diffstar_u_params_singlegal(*args)
+    u_params_q, u_params_ms, shifts_q, frac_quench, msk_q = _res

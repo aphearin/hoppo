@@ -17,7 +17,7 @@ from .pdf_model_assembly_bias_shifts import (
 )
 from .pdf_quenched import DEFAULT_SFH_PDF_QUENCH_PARAMS, _get_chol_params_quench
 from .pdf_quenched import _get_cov_scalar as _get_cov_scalar_q
-from .pdf_quenched import _get_mean_smah_params_quench
+from .pdf_quenched import _get_mean_smah_params_quench, frac_quench_vs_lgm0
 
 
 @jjit
@@ -63,26 +63,25 @@ def mc_diffstar_u_params_singlegal(
     R_vals_q = _get_slopes_quench(lgm0, *R_model_params_q)
     shifts_q = jnp.array(R_vals_q) * (p50 - 0.5)
 
-    # This part is not implemented yet either, but we need a scalar value of F_q
-    # Compute quenched fraction
-    # frac_quench = frac_quench_vs_lgm0(lgm0, fquench_x0, *pdf_parameters_Q[1:4])
+    fquench_params = jnp.array(list(pdf_pdict_Q.values()))[:4]
+    fquench_x0 = pdf_pdict_Q["frac_quench_x0"] + shifts_q[0]
+    frac_quench = frac_quench_vs_lgm0(lgm0, fquench_x0, *fquench_params[1:4])
 
     # Monte Carlo draws
     ms_key, q_key, frac_q_key = jran.split(ran_key, 3)
 
     u_params_q = jran.multivariate_normal(q_key, jnp.array(mu_q), cov_q, shape=())
-    u_params_ms = jran.multivariate_normal(q_key, jnp.array(mu_ms), cov_ms, shape=())
+    u_params_ms = jran.multivariate_normal(ms_key, jnp.array(mu_ms), cov_ms, shape=())
 
     u_params_ms = u_params_ms + shifts_ms
-
-    # Next line fails because shifts_q.shape=(9,) u_params_q.shape=(8,)
-    # u_params_q = u_params_q + shifts_q
+    u_params_q = u_params_q + shifts_q[1:]
 
     uran = jran.uniform(frac_q_key, minval=0, maxval=1, shape=())
 
+    msk_q = uran < frac_quench
     # Finally need to implement this properly
     # should use the scalar value of F_q calculated above
     # Need to take care of u_params_q and u_params_ms having different dimension
     # u_params = jnp.where(uran < frac_q, u_params_q, u_params_ms)
 
-    return u_params_q, u_params_ms, shifts_q
+    return u_params_q, u_params_ms, shifts_q, frac_quench, msk_q
